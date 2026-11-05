@@ -13,6 +13,7 @@ const MARKER = 'bullet';
 const MESSAGES_AREA_HEIGHT = 280;
 const FONT_STACK = "'Google Sans', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 const MASK_MODE = 'paragraph';
+const FILL_HEIGHT = true;
 const STAGES = MASK_MODE === 'paragraph' ? ['paragraph', 'scramble', 'plain'] : ['scramble', 'plain'];
 
 const isEmptyContent = (text) => {
@@ -392,7 +393,7 @@ export default function SecretChat() {
 
   if (!authenticated) {
     return (
-      <div className="sc-root sc-auth" data-skin={SKIN} style={{ fontFamily: FONT_STACK }}>
+      <div className={FILL_HEIGHT ? 'sc-root sc-fill-height sc-auth' : 'sc-root sc-auth'} data-skin={SKIN} style={{ fontFamily: FONT_STACK }}>
         <div className="sc-auth-panel">
           <form onSubmit={handlePasswordSubmit}>
             <input
@@ -417,7 +418,7 @@ export default function SecretChat() {
   }
 
   return (
-    <div className="sc-root" data-skin={SKIN} style={{ fontFamily: FONT_STACK }}>
+    <div className={FILL_HEIGHT ? 'sc-root sc-fill-height' : 'sc-root'} data-skin={SKIN} style={{ fontFamily: FONT_STACK }}>
       <div className="sc-top-bar">
         <div
           className="sc-top-icon sc-icon-btn"
@@ -485,7 +486,7 @@ export default function SecretChat() {
         ref={messagesContainerRef}
         onScroll={updateStickToBottom}
         className="sc-list"
-        style={{ height: MESSAGES_AREA_HEIGHT }}
+        style={FILL_HEIGHT ? undefined : { height: MESSAGES_AREA_HEIGHT }}
       >
         {LAYOUT === 'stream'
           ? (() => {

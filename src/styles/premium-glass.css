@@ -5,15 +5,15 @@
   --sc-panel: #1e1f20;
   --sc-border: #3c4043;
   --sc-accent: #7d8a9a;
-  --sc-text: #c4c7c5;
-  --sc-text-dim: #7a7f84;
+  --sc-text: #e3e3e3;
+  --sc-text-dim: #c4c7c5;
   --sc-number: #55555e;
   --sc-input-bg: #1e1f20;
-  --sc-input-text: #c4c7c5;
-  --sc-placeholder: #7a7f84;
+  --sc-input-text: #e3e3e3;
+  --sc-placeholder: #9aa0a6;
   --sc-mono-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   --sc-font: 'Google Sans', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --sc-font-size: 15px;
+  --sc-font-size: 16px;
   --sc-line-height: 1.5;
   --sc-transition: 120ms color, 120ms border-color, 120ms background-color;
 }
@@ -61,9 +61,16 @@
   margin: 0 auto;
 }
 
+.sc-fill-height {
+  height: 100dvh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
 /* Top bar */
 .sc-top-bar {
-  height: 44px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -73,6 +80,8 @@
 
 .sc-top-icon {
   color: #c4c7c5;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -88,14 +97,14 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--sc-text);
   font-family: var(--sc-font);
 }
 
 .sc-dim {
-  color: var(--sc-text-dim);
-  font-size: 13px;
+  color: var(--sc-text);
+  font-size: 16px;
   font-family: var(--sc-font);
 }
 
@@ -123,7 +132,7 @@
   background-color: var(--sc-input-bg);
   color: var(--sc-input-text);
   font-family: var(--sc-font);
-  font-size: 14px;
+  font-size: 16px;
   border: 1px solid var(--sc-border);
   border-radius: 12px;
   padding: 8px 12px;
@@ -143,10 +152,15 @@
 
 /* Message list */
 .sc-list {
-  padding: 8px 16px;
+  padding: 12px 16px;
   list-style: none;
   overflow-y: auto;
   margin: 0;
+}
+
+.sc-fill-height .sc-list {
+  flex: 1;
+  min-height: 0;
 }
 
 .sc-list ol {
@@ -157,13 +171,13 @@
 
 /* Stream layout: uniform paragraph spacing */
 .sc-stream-paragraph {
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: var(--sc-font-size);
+  line-height: 1.5;
   font-weight: 400;
   color: var(--sc-text);
   word-break: break-word;
-  margin: 0 0 10px 0;
-  min-height: 1.65em;
+  margin: 0 0 16px 0;
+  min-height: 1.5em;
   cursor: pointer;
   user-select: text;
   font-family: var(--sc-font);
@@ -176,7 +190,7 @@
 .sc-stream-bullets {
   list-style: none;
   padding: 0;
-  margin: 0 0 10px 0;
+  margin: 0 0 16px 0;
   display: flex;
   flex-direction: column;
 }
@@ -186,8 +200,8 @@
 }
 
 .sc-bullet-item {
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: var(--sc-font-size);
+  line-height: 1.5;
   font-weight: 400;
   color: var(--sc-text);
   word-break: break-word;
@@ -219,8 +233,8 @@
 
 .sc-stream-text {
   font-family: var(--sc-font);
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: var(--sc-font-size);
+  line-height: 1.5;
   font-weight: 400;
   color: var(--sc-text);
   word-break: break-word;
@@ -235,12 +249,12 @@
 }
 
 .sc-stream-text.sc-empty {
-  min-height: 1.65em;
+  min-height: 1.5em;
   display: inline-block;
 }
 
 .sc-apostrophe {
-  color: var(--sc-number);
+  color: var(--sc-text);
   margin-left: 2px;
 }
 
@@ -253,7 +267,9 @@
 }
 
 .sc-action-icon {
-  color: var(--sc-text-dim);
+  color: #c4c7c5;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -267,8 +283,8 @@
 
 .sc-disclaimer {
   text-align: center;
-  font-size: 11px;
-  color: var(--sc-text-dim);
+  font-size: 12px;
+  color: #9aa0a6;
   padding: 8px 16px;
   flex-shrink: 0;
   font-family: var(--sc-font);
@@ -279,17 +295,25 @@
   flex-shrink: 0;
 }
 
+.sc-fill-height .sc-composer-wrap {
+  margin: 16px;
+  padding: 0;
+}
+
 .sc-pill {
   display: flex;
   align-items: center;
   gap: 8px;
   background-color: var(--sc-input-bg);
-  border-radius: 28px;
+  border-radius: 32px;
+  min-height: 56px;
   padding: 12px 16px;
 }
 
 .sc-pill-icon {
   color: #c4c7c5;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -308,11 +332,11 @@
   outline: none;
   color: var(--sc-input-text);
   font-family: var(--sc-font);
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.5;
   resize: none;
   padding: 0;
-  min-height: 20px;
+  min-height: auto;
 }
 
 .sc-textarea::placeholder {
@@ -347,7 +371,7 @@
   background-color: var(--sc-input-bg);
   color: var(--sc-input-text);
   font-family: var(--sc-font);
-  font-size: 14px;
+  font-size: 16px;
   border: 1px solid var(--sc-border);
   border-radius: 12px;
   padding: 6px 8px;
@@ -371,7 +395,7 @@
 }
 
 .sc-button {
-  font-size: 14px;
+  font-size: 16px;
   font-family: var(--sc-font);
   color: var(--sc-text-dim);
   background: none;

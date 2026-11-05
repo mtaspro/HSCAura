@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { pickParagraph, STAGES } from '../utils/maskText.js';
+import paragraphs from '../data/paragraphs.json';
 
 describe('pickParagraph', () => {
   it('returns the same paragraph for the same id', () => {
@@ -36,7 +37,7 @@ describe('pickParagraph', () => {
 
   it('when all short paragraphs are used, accepts the starting one', () => {
     const used = new Set();
-    const shortParas = ['The meeting is at noon tomorrow.', 'Please check the weather forecast.', 'Do not forget to lock the door.'];
+    const shortParas = paragraphs.short;
     shortParas.forEach(p => used.add(p));
     const result = pickParagraph('fallback-id', 'hi', used);
     expect(result).toBeDefined();
