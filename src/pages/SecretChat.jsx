@@ -15,6 +15,9 @@ const FONT_STACK = "'Google Sans', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 
 const MASK_MODE = 'paragraph';
 const FILL_HEIGHT = true;
 const STAGES = MASK_MODE === 'paragraph' ? ['paragraph', 'scramble', 'plain'] : ['scramble', 'plain'];
+const PEEK_COUNT = 5;
+const PEEK_MS = 3000;
+const PEEK_KEY = 'Period';
 
 const isEmptyContent = (text) => {
   return !text || /^[.?\s]*$/.test(text);
@@ -125,6 +128,9 @@ export default function SecretChat() {
   const pendingMarkReadRef = useRef(new Set());
   const typingTimerRef = useRef(null);
   const composingThrottleRef = useRef(null);
+  const peekTimerRef = useRef(null);
+  const [peekIds, setPeekIds] = useState(new Set());
+  const peekMarkedReadRef = useRef(new Set());
   /** When true, message updates scroll to bottom; set false when user scrolls up to read older messages */
   const stickToBottomRef = useRef(true);
 
@@ -179,17 +185,21 @@ export default function SecretChat() {
   useEffect(() => {
     if (!authenticated || mode !== 'chat' || !phoneNumber) return;
 
-    // Detect when any message enters stage 2 (plain) and auto mark-read
-    const stageValues = Object.values(messageStages);
-    const newlyPlain = stageValues.filter((s) => s === 2).length;
+    // Collect all message IDs effectively at "plain" stage (stage 2 or peeked)
+    const plainIds = new Set();
+    Object.keys(messageStages).forEach((id) => {
+      if (messageStages[id] === 2) plainIds.add(id);
+    });
+    peekIds.forEach((id) => plainIds.add(id));
 
-    if (newlyPlain > 0) {
-      // Find which messages just entered stage 2
-      Object.keys(messageStages).forEach((id) => {
-        if (messageStages[id] === 2) {
-          pendingMarkReadRef.current.add(id);
-        }
-      });
+    // Filter to friend messages not already offered for mark-read
+    const friendPlainIds = [...plainIds].filter((id) => {
+      const msg = messages.find((m) => m._id === id);
+      return msg?.sender === 'friend' && !peekMarkedReadRef.current.has(id);
+    });
+
+    if (friendPlainIds.length > 0) {
+      friendPlainIds.forEach((id) => pendingMarkReadRef.current.add(id));
 
       // Debounce: clear existing timer and start a new one
       if (markReadDebounceRef.current) {
@@ -198,8 +208,10 @@ export default function SecretChat() {
 
       const delayMs = 2000 + Math.floor(Math.random() * 4000); // 2-6s random
       markReadDebounceRef.current = setTimeout(async () => {
+        const ids = Array.from(pendingMarkReadRef.current);
         pendingMarkReadRef.current.clear();
         markReadDebounceRef.current = null;
+        ids.forEach((id) => peekMarkedReadRef.current.add(id));
 
         if (!phoneNumber || !realNumber.trim()) return;
 
@@ -222,7 +234,7 @@ export default function SecretChat() {
         markReadDebounceRef.current = null;
       }
     };
-  }, [messageStages, authenticated, mode, phoneNumber, realNumber, API_URL]);
+  }, [messageStages, peekIds, messages, authenticated, mode, phoneNumber, realNumber, API_URL]);
 
   const sendTyping = useCallback(async (state) => {
     if (!phoneNumber || !realNumber.trim() || mode !== 'chat') return;
@@ -279,6 +291,38 @@ export default function SecretChat() {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Peek shortcut: Ctrl+Period (works anywhere, including composer)
+      if (e.code === PEEK_KEY && e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        const newest = [...messages].slice(-PEEK_COUNT);
+        const newPeekIds = new Set(newest.map((m) => m._id));
+        setPeekIds(newPeekIds);
+
+        // Restart peek timer
+        if (peekTimerRef.current) clearTimeout(peekTimerRef.current);
+        peekTimerRef.current = setTimeout(() => {
+          setPeekIds(new Set());
+          peekTimerRef.current = null;
+        }, PEEK_MS);
+
+        // Scroll to bottom if already near bottom
+        if (stickToBottomRef.current) {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+        return;
+      }
+
+      // Esc ends peek immediately
+      if (e.key === 'Escape') {
+        setPeekIds(new Set());
+        if (peekTimerRef.current) {
+          clearTimeout(peekTimerRef.current);
+          peekTimerRef.current = null;
+        }
+        return;
+      }
+
+      // Existing message shortcuts (chat mode only)
       if (mode === 'chat' && e.ctrlKey) {
         if (!isNaN(e.key) && e.key !== '0') {
           e.preventDefault();
@@ -310,6 +354,31 @@ export default function SecretChat() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [messages, mode]);
+
+  // Clear peek timer on unmount
+  useEffect(() => {
+    return () => {
+      if (peekTimerRef.current) {
+        clearTimeout(peekTimerRef.current);
+        peekTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  // End peek when document becomes hidden
+  useEffect(() => {
+    const handler = () => {
+      if (document.hidden) {
+        setPeekIds(new Set());
+        if (peekTimerRef.current) {
+          clearTimeout(peekTimerRef.current);
+          peekTimerRef.current = null;
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, []);
 
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
@@ -428,7 +497,7 @@ export default function SecretChat() {
   };
 
   const getVisibleText = (msg) => {
-    const stage = messageStages[msg._id] ?? 0;
+    const stage = peekIds.has(msg._id) ? 2 : (messageStages[msg._id] ?? 0);
     if (stage === 1) return msg.encrypted;
     if (stage === 2) return msg.message;
     const para = getParagraphForMsg(msg);
@@ -469,18 +538,28 @@ export default function SecretChat() {
   };
 
   const renderStreamMessage = (msg) => {
-    const visibleText = getVisibleText(msg);
+    const stage = peekIds.has(msg._id) ? 2 : (messageStages[msg._id] ?? 0);
+    const para = getParagraphForMsg(msg);
+    const visibleText = stage === 1 ? msg.encrypted : stage === 2 ? msg.message : para !== null ? para : msg.encrypted;
     const isEmpty = isEmptyContent(visibleText);
 
     const content = (
       <span
-        className={`sc-stream-text ${isEmpty ? 'sc-empty' : ''}`}
+        className={`sc-stream-layer ${isEmpty ? 'sc-empty' : ''}`}
         onClick={() => toggleDecrypt(msg._id)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleDecrypt(msg._id); }}
       >
-        {visibleText}
+        <span className={`sc-stream-text ${stage !== 0 ? 'sc-layer-hidden' : ''}`}>
+          {para !== null ? para : msg.encrypted}
+        </span>
+        <span className={`sc-stream-text ${stage !== 1 ? 'sc-layer-hidden' : ''}`}>
+          {msg.encrypted}
+        </span>
+        <span className={`sc-stream-text ${stage !== 2 ? 'sc-layer-hidden' : ''}`}>
+          {msg.message}
+        </span>
         {MARKER === 'apostrophe' && <span className="sc-apostrophe">'</span>}
       </span>
     );
