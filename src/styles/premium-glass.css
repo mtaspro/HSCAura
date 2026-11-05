@@ -145,9 +145,11 @@
   color: var(--sc-placeholder);
 }
 
-.sc-config-input:focus {
+.sc-config-input:focus,
+.sc-config-input:focus-visible {
   outline: none;
-  border-color: var(--sc-accent);
+  box-shadow: none;
+  border: none;
 }
 
 /* Message list */
@@ -308,6 +310,11 @@
   border-radius: 32px;
   min-height: 56px;
   padding: 12px 16px;
+  transition: background-color 120ms ease;
+}
+
+.sc-pill:focus-within {
+  background-color: #222426;
 }
 
 .sc-pill-icon {
@@ -343,8 +350,11 @@
   color: var(--sc-placeholder);
 }
 
-.sc-textarea:focus {
+.sc-textarea:focus,
+.sc-textarea:focus-visible {
   outline: none;
+  box-shadow: none;
+  border: none;
 }
 
 /* Password screen */
@@ -384,9 +394,11 @@
   color: var(--sc-placeholder);
 }
 
-.sc-input:focus {
+.sc-input:focus,
+.sc-input:focus-visible {
   outline: none;
-  border-color: var(--sc-accent);
+  box-shadow: none;
+  border: none;
 }
 
 .sc-input-encoder {
