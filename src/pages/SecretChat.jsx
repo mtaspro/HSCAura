@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { createSocket, addSocketListeners } from '../utils/socket.js';
 import { secureStorage } from '../utils/secureStorage';
+import { pickParagraph } from '../utils/maskText.js';
 import '../styles/premium-glass.css';
 
 const SKIN = 'assistant';
@@ -11,6 +12,8 @@ const LAYOUT = 'stream';
 const MARKER = 'bullet';
 const MESSAGES_AREA_HEIGHT = 280;
 const FONT_STACK = "'Google Sans', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+const MASK_MODE = 'paragraph';
+const STAGES = MASK_MODE === 'paragraph' ? ['paragraph', 'scramble', 'plain'] : ['scramble', 'plain'];
 
 const isEmptyContent = (text) => {
   return !text || /^[.?\s]*$/.test(text);
@@ -106,7 +109,7 @@ export default function SecretChat() {
   const [realNumber, setRealNumber] = useState('');
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
-  const [showDecrypted, setShowDecrypted] = useState({});
+  const [messageStages, setMessageStages] = useState({});
   const [showFields, setShowFields] = useState(false);
   const [mode, setMode] = useState('chat');
   const [markingRead, setMarkingRead] = useState(false);
@@ -115,6 +118,8 @@ export default function SecretChat() {
   const configDropdownRef = useRef(null);
   const hamburgerRef = useRef(null);
   const messageRefsRef = useRef({});
+  const maskCache = useRef(new Map());
+  const usedMasks = useRef(new Set());
   /** When true, message updates scroll to bottom; set false when user scrolls up to read older messages */
   const stickToBottomRef = useRef(true);
 
@@ -287,16 +292,56 @@ export default function SecretChat() {
     }
   };
 
-  const toggleDecrypt = (id, scrollIntoView = false) => {
-    setShowDecrypted(prev => ({ ...prev, [id]: !prev[id] }));
-    if (scrollIntoView) {
-      setTimeout(() => {
-        const el = messageRefsRef.current[id];
-        if (el) {
-          el.scrollIntoView({ block: 'nearest' });
-        }
-      }, 0);
+  const getParagraphForMsg = (msg) => {
+    const cached = maskCache.current.get(msg._id);
+    if (cached !== undefined) return cached;
+
+    const plain = msg.message;
+    const para = pickParagraph(msg._id, plain, usedMasks.current);
+    maskCache.current.set(msg._id, para);
+    if (para !== null) {
+      usedMasks.current.add(para);
     }
+
+    if (maskCache.current.size > 500) {
+      const entries = Array.from(maskCache.current.entries());
+      for (let i = 0; i < 200 && i < entries.length; i++) {
+        const [cid, cpara] = entries[i];
+        maskCache.current.delete(cid);
+        if (cpara !== null) {
+          usedMasks.current.delete(cpara);
+        }
+      }
+    }
+
+    return para;
+  };
+
+  const getVisibleText = (msg) => {
+    const stage = messageStages[msg._id] ?? 0;
+    if (stage === 1) return msg.encrypted;
+    if (stage === 2) return msg.message;
+    const para = getParagraphForMsg(msg);
+    return para !== null ? para : msg.encrypted;
+  };
+
+  const toggleDecrypt = (id, scrollIntoView = false) => {
+    setMessageStages(prev => {
+      const cur = prev[id] ?? 0;
+      const nxt = (cur + 1) % STAGES.length;
+      const shouldScroll = scrollIntoView && nxt !== 0;
+      if (shouldScroll) {
+        setTimeout(() => {
+          const el = messageRefsRef.current[id];
+          if (el) {
+            el.scrollIntoView({ block: 'nearest' });
+          }
+        }, 0);
+      }
+      const next = { ...prev };
+      next[id] = nxt;
+      return next;
+    });
   };
 
   const groupMessages = (msgs) => {
@@ -314,7 +359,7 @@ export default function SecretChat() {
   };
 
   const renderStreamMessage = (msg) => {
-    const visibleText = showDecrypted[msg._id] ? msg.message : msg.encrypted;
+    const visibleText = getVisibleText(msg);
     const isEmpty = isEmptyContent(visibleText);
 
     const content = (
@@ -512,12 +557,13 @@ export default function SecretChat() {
                       <p
                         key={msg._id}
                         className="sc-msg-paragraph"
+                        ref={(el) => { messageRefsRef.current[msg._id] = el; }}
                         onClick={() => toggleDecrypt(msg._id)}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleDecrypt(msg._id); }}
                       >
-                        {showDecrypted[msg._id] ? msg.message : msg.encrypted}
+                        {getVisibleText(msg)}
                       </p>
                     ))}
                     {isLastFriendTurn && (
@@ -550,8 +596,9 @@ export default function SecretChat() {
                   {!isFriend && <span className="sc-avatar"></span>}
                   <span
                     className={`sc-msg-text ${isFriend ? 'friend' : 'mine'}`}
+                    ref={(el) => { messageRefsRef.current[msg._id] = el; }}
                   >
-                    {showDecrypted[msg._id] ? msg.message : msg.encrypted}
+                    {getVisibleText(msg)}
                   </span>
                   {isFriend && isLatest && (
                     <div className="sc-action-row">
