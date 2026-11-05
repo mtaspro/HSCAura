@@ -315,7 +315,8 @@ Deliver ChatGPT-quality responses with excellent formatting! ✨`,
                                 id: message.key.id,
                                 fromMe: !!message.key.fromMe,
                                 participant: message.key.participant || undefined
-                            }
+                            },
+                            read: false
                         };
                         
                         console.log(`💾 SAVING TO DB WITH PAYLOAD:`, savePayload);
@@ -391,62 +392,25 @@ async function markChatAsRead({ lid, realNumber, messageKeys = [] }) {
         throw new Error('WhatsApp not connected');
     }
 
-    const remoteJidsFromDb = messageKeys.map((k) => k.remoteJid).filter(Boolean);
-    const jidCandidates = collectJidCandidates(lid, realNumber, remoteJidsFromDb);
-
     const keysToRead = dedupeMessageKeys(
         messageKeys.map((k) => ({
             remoteJid: k.remoteJid,
             id: k.id,
             fromMe: k.fromMe,
             participant: k.participant
-        }))
+        })).filter((k) => k?.remoteJid && k?.id)
     );
 
-    for (const jid of jidCandidates) {
-        const cached = recentIncomingKeys.get(jid) || [];
-        for (const item of cached) {
-            if (item?.key?.id) keysToRead.push(item.key);
-        }
-    }
-
-    const uniqueKeys = dedupeMessageKeys(keysToRead);
-    if (uniqueKeys.length === 0) {
+    if (keysToRead.length === 0) {
         return { success: false, markedCount: 0, error: 'No message keys found. New messages will work after they arrive.' };
     }
 
-    await sock.readMessages(uniqueKeys);
+    await sock.readMessages(keysToRead);
 
-    const primaryJid = uniqueKeys[uniqueKeys.length - 1].remoteJid || jidCandidates[0];
-    const lastCached = recentIncomingKeys.get(primaryJid);
-    const lastEntry = lastCached?.[lastCached.length - 1];
+    const primaryJid = keysToRead[keysToRead.length - 1].remoteJid;
 
-    if (primaryJid && lastEntry?.key) {
-        try {
-            await sock.chatModify(
-                {
-                    markRead: true,
-                    lastMessages: [
-                        {
-                            key: lastEntry.key,
-                            messageTimestamp: lastEntry.messageTimestamp
-                        }
-                    ]
-                },
-                primaryJid
-            );
-        } catch (modifyError) {
-            console.warn('chatModify markRead skipped:', modifyError.message);
-        }
-    }
-
-    for (const jid of jidCandidates) {
-        recentIncomingKeys.delete(jid);
-    }
-    if (primaryJid) recentIncomingKeys.delete(primaryJid);
-
-    console.log(`✅ Marked ${uniqueKeys.length} message(s) as read for ${primaryJid}`);
-    return { success: true, markedCount: uniqueKeys.length, jid: primaryJid };
+    console.log(`✅ Marked ${keysToRead.length} message(s) as read for ${primaryJid}`);
+    return { success: true, markedCount: keysToRead.length, jid: primaryJid };
 }
 
 module.exports = {

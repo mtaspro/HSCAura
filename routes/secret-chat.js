@@ -250,10 +250,13 @@ router.post('/mark-read/:phoneNumber', sessionMiddleware, async (req, res) => {
     const friendMessages = await SecretChat.find({
       phoneNumber: { $regex: `^${phoneNumber}` },
       sender: 'friend',
-      'waKey.id': { $exists: true, $ne: null }
+      'waKey.id': { $exists: true, $ne: null },
+      read: { $ne: true }
     })
       .sort({ timestamp: -1 })
       .limit(50);
+
+    console.log(`📖 [MARK-READ] Found ${friendMessages.length} unread friend messages for ${phoneNumber}`);
 
     const messageKeys = friendMessages.map((m) => m.waKey).filter((k) => k?.id);
 
@@ -263,6 +266,8 @@ router.post('/mark-read/:phoneNumber', sessionMiddleware, async (req, res) => {
       messageKeys
     });
 
+    console.log(`📖 [MARK-READ] markChatAsRead result:`, result);
+
     if (!result.success) {
       return res.status(400).json({ error: result.error || 'Failed to mark messages as read' });
     }
@@ -270,17 +275,77 @@ router.post('/mark-read/:phoneNumber', sessionMiddleware, async (req, res) => {
     if (friendMessages.length > 0) {
       await SecretChat.updateMany(
         { _id: { $in: friendMessages.map((m) => m._id) } },
-        { waMarkedRead: true }
+        { waMarkedRead: true, read: true }
       );
     }
 
     res.json({
       success: true,
       markedCount: result.markedCount,
-      jid: result.jid
+      jid: result.jid,
+      ids: friendMessages.map((m) => m._id)
     });
   } catch (error) {
     console.error('❌ [MARK-READ] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Typing indicator
+router.post('/typing/:phoneNumber', sessionMiddleware, async (req, res) => {
+  try {
+    let { phoneNumber } = req.params;
+    let { state, realNumber } = req.body;
+
+    phoneNumber = phoneNumber.split('@')[0];
+
+    if (!state || !['composing', 'paused'].includes(state)) {
+      return res.status(400).json({ error: 'Invalid state. Use "composing" or "paused".' });
+    }
+
+    if (!realNumber) {
+      const mapping = await SecretChat.findOne({
+        phoneNumber: { $regex: `^${phoneNumber}` },
+        sender: 'me',
+        realNumber: { $exists: true, $ne: '' }
+      }).sort({ timestamp: -1 });
+      realNumber = mapping?.realNumber;
+    }
+
+    if (!realNumber) {
+      return res.status(400).json({
+        error: 'Real number required. Set it in Config or send at least one message first.'
+      });
+    }
+
+    if (!realNumber.startsWith('88')) {
+      realNumber = '88' + digitsOnly(realNumber);
+    }
+
+    const sock = whatsappService.sock;
+    if (!sock) {
+      return res.status(503).json({ error: 'WhatsApp not connected' });
+    }
+
+    // Prefer the latest stored friend message's remoteJid if it ends in @lid
+    let jid = realNumber.includes('@') ? realNumber : `${realNumber}@s.whatsapp.net`;
+    const latestFriend = await SecretChat.findOne({
+      phoneNumber: { $regex: `^${phoneNumber}` },
+      sender: 'friend',
+      'waKey.remoteJid': { $exists: true, $ne: null, $regex: '@lid$' }
+    })
+      .sort({ timestamp: -1 })
+      .limit(1);
+    if (latestFriend?.waKey?.remoteJid) {
+      jid = latestFriend.waKey.remoteJid;
+    }
+
+    await sock.presenceSubscribe(jid);
+    await sock.sendPresenceUpdate(state, jid);
+
+    res.json({ success: true, state, jid });
+  } catch (error) {
+    console.error('❌ [TYPING] Error:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -121,6 +121,10 @@ export default function SecretChat() {
   const messageRefsRef = useRef({});
   const maskCache = useRef(new Map());
   const usedMasks = useRef(new Set());
+  const markReadDebounceRef = useRef(null);
+  const pendingMarkReadRef = useRef(new Set());
+  const typingTimerRef = useRef(null);
+  const composingThrottleRef = useRef(null);
   /** When true, message updates scroll to bottom; set false when user scrolls up to read older messages */
   const stickToBottomRef = useRef(true);
 
@@ -171,6 +175,86 @@ export default function SecretChat() {
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
     stickToBottomRef.current = distanceFromBottom < 100;
   }, []);
+
+  useEffect(() => {
+    if (!authenticated || mode !== 'chat' || !phoneNumber) return;
+
+    // Detect when any message enters stage 2 (plain) and auto mark-read
+    const stageValues = Object.values(messageStages);
+    const newlyPlain = stageValues.filter((s) => s === 2).length;
+
+    if (newlyPlain > 0) {
+      // Find which messages just entered stage 2
+      Object.keys(messageStages).forEach((id) => {
+        if (messageStages[id] === 2) {
+          pendingMarkReadRef.current.add(id);
+        }
+      });
+
+      // Debounce: clear existing timer and start a new one
+      if (markReadDebounceRef.current) {
+        clearTimeout(markReadDebounceRef.current);
+      }
+
+      const delayMs = 2000 + Math.floor(Math.random() * 4000); // 2-6s random
+      markReadDebounceRef.current = setTimeout(async () => {
+        pendingMarkReadRef.current.clear();
+        markReadDebounceRef.current = null;
+
+        if (!phoneNumber || !realNumber.trim()) return;
+
+        try {
+          const token = secureStorage.getToken();
+          await axios.post(
+            `${API_URL}/api/secret-chat/mark-read/${encodeURIComponent(phoneNumber)}`,
+            { realNumber: realNumber.trim() || undefined },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+        } catch {
+          // Silent — no alert or toast
+        }
+      }, delayMs);
+    }
+
+    return () => {
+      if (markReadDebounceRef.current) {
+        clearTimeout(markReadDebounceRef.current);
+        markReadDebounceRef.current = null;
+      }
+    };
+  }, [messageStages, authenticated, mode, phoneNumber, realNumber, API_URL]);
+
+  // Typing indicator: paused 3s after last keystroke, on empty input, after send, on unmount
+  useEffect(() => {
+    const startPausedTimer = () => {
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = setTimeout(() => {
+        sendTyping('paused');
+      }, 3000);
+    };
+
+    // If input is currently empty, send paused immediately
+    if (!inputText.trim()) {
+      sendTyping('paused');
+    } else {
+      startPausedTimer();
+    }
+
+    return () => {
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
+      if (composingThrottleRef.current) {
+        clearTimeout(composingThrottleRef.current);
+        composingThrottleRef.current = null;
+      }
+      // Send paused on unmount if we have a valid session
+      if (phoneNumber && realNumber.trim() && mode === 'chat') {
+        sendTyping('paused');
+      }
+    };
+  }, [inputText, phoneNumber, realNumber, mode, API_URL, sendTyping]);
 
   useEffect(() => {
     if (!authenticated || mode !== 'chat') return;
@@ -257,6 +341,16 @@ export default function SecretChat() {
   };
 
   const handleKeyPress = async (e) => {
+    // Send composing on every keystroke in chat mode (throttled to once per 4s)
+    if (mode === 'chat' && inputText.trim() && realNumber.trim()) {
+      if (!composingThrottleRef.current) {
+        sendTyping('composing');
+        composingThrottleRef.current = setTimeout(() => {
+          composingThrottleRef.current = null;
+        }, 4000);
+      }
+    }
+
     if (e.shiftKey && e.key === 'Enter') {
       e.preventDefault();
       
@@ -271,7 +365,7 @@ export default function SecretChat() {
         alert('Enter both Target ID and Real number');
         return;
       }
-      
+
       const encrypted = rot13(inputText);
       
       try {
@@ -286,12 +380,27 @@ export default function SecretChat() {
         
         setInputText('');
         stickToBottomRef.current = true;
+        sendTyping('paused');
         await loadHistory();
       } catch (error) {
         alert('Send failed: ' + error.message);
       }
     }
   };
+
+  const sendTyping = useCallback(async (state) => {
+    if (!phoneNumber || !realNumber.trim() || mode !== 'chat') return;
+    try {
+      const token = secureStorage.getToken();
+      await axios.post(
+        `${API_URL}/api/secret-chat/typing/${encodeURIComponent(phoneNumber)}`,
+        { state, realNumber: realNumber.trim() },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    } catch {
+      // Silent — errors swallowed
+    }
+  }, [phoneNumber, realNumber, mode, API_URL]);
 
   const getParagraphForMsg = (msg) => {
     const cached = maskCache.current.get(msg._id);

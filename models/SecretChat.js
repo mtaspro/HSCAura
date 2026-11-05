@@ -15,7 +15,8 @@ const secretChatSchema = new mongoose.Schema({
     fromMe: { type: Boolean, default: false },
     participant: String
   },
-  waMarkedRead: { type: Boolean, default: false }
+  waMarkedRead: { type: Boolean, default: false },
+  read: { type: Boolean, default: false }
 });
 
 export default mongoose.model('SecretChat', secretChatSchema);
