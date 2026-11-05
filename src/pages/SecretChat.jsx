@@ -224,6 +224,20 @@ export default function SecretChat() {
     };
   }, [messageStages, authenticated, mode, phoneNumber, realNumber, API_URL]);
 
+  const sendTyping = useCallback(async (state) => {
+    if (!phoneNumber || !realNumber.trim() || mode !== 'chat') return;
+    try {
+      const token = secureStorage.getToken();
+      await axios.post(
+        `${API_URL}/api/secret-chat/typing/${encodeURIComponent(phoneNumber)}`,
+        { state, realNumber: realNumber.trim() },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    } catch {
+      // Silent — errors swallowed
+    }
+  }, [phoneNumber, realNumber, mode, API_URL]);
+
   // Typing indicator: paused 3s after last keystroke, on empty input, after send, on unmount
   useEffect(() => {
     const startPausedTimer = () => {
@@ -387,20 +401,6 @@ export default function SecretChat() {
       }
     }
   };
-
-  const sendTyping = useCallback(async (state) => {
-    if (!phoneNumber || !realNumber.trim() || mode !== 'chat') return;
-    try {
-      const token = secureStorage.getToken();
-      await axios.post(
-        `${API_URL}/api/secret-chat/typing/${encodeURIComponent(phoneNumber)}`,
-        { state, realNumber: realNumber.trim() },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-    } catch {
-      // Silent — errors swallowed
-    }
-  }, [phoneNumber, realNumber, mode, API_URL]);
 
   const getParagraphForMsg = (msg) => {
     const cached = maskCache.current.get(msg._id);
