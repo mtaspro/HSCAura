@@ -207,9 +207,39 @@ const AdminWhatsApp = () => {
     } catch (error) {
       setErrorMessage(error.response?.data?.error || 'Failed to trigger calendar update');
     } finally {
-      setTimeout(() => setIsLoading(false), 2000);
+      setIsLoading(false);
     }
   };
+
+  const handleClearAllCalendarGroups = async () => {
+    if (!confirm('This will remove all calendar groups. Are you sure?')) return;
+
+    setIsLoading(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const token = secureStorage.getToken();
+      const response = await axios.post(`${apiUrl}/api/whatsapp/set-calendar-group`,
+        { groups: [] },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (response.data.success) {
+        setSuccessMessage('All calendar groups cleared');
+        setCalendarGroups([]);
+        setSelectedGroupIds([]);
+      } else {
+        setErrorMessage(response.data.error || 'Failed to clear calendar groups');
+      }
+    } catch (error) {
+      setErrorMessage(error.response?.data?.error || 'Failed to clear calendar groups');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   const sendMessage = async (type) => {
     if (!message.trim()) {
@@ -526,6 +556,14 @@ const AdminWhatsApp = () => {
                 className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
                 💾 Save Calendar Groups & Exams
+              </button>
+
+              <button
+                onClick={() => handleClearAllCalendarGroups()}
+                disabled={isLoading}
+                className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+              >
+                🗑️ Clear All Groups
               </button>
 
               <button
