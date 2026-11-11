@@ -195,32 +195,54 @@ router.get('/battle-group', sessionMiddleware, async (req, res) => {
   }
 });
 
-// Set daily calendar group
+// Set daily calendar groups (multiple groups, each with selected exams)
 router.post('/set-calendar-group', sessionMiddleware, async (req, res) => {
   try {
     if (!req.user.isAdmin) {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
-    const { groupId } = req.body;
+    const { groups } = req.body;
+
+    // Backward compat: accept single groupId too
+    let groupConfigs = groups;
+    if (!groupConfigs && req.body.groupId) {
+      groupConfigs = [{
+        groupId: req.body.groupId,
+        groupName: req.body.groupName || '',
+        examIds: []
+      }];
+    }
+
+    if (!Array.isArray(groupConfigs)) {
+      return res.status(400).json({ error: 'groups array is required' });
+    }
+
+    // Normalize each group config
+    const normalized = groupConfigs.map(g => ({
+      groupId: g.groupId,
+      groupName: g.groupName || '',
+      examIds: Array.isArray(g.examIds) ? g.examIds : []
+    }));
+
     const WhatsAppSettings = (await import('../models/WhatsAppSettings.js')).default;
-    
+
     await WhatsAppSettings.findOneAndUpdate(
-      { settingKey: 'dailyCalendarGroup' },
-      { 
-        settingValue: groupId,
+      { settingKey: 'dailyCalendarGroups' },
+      {
+        settingValue: normalized,
         updatedBy: req.user.userId
       },
       { upsert: true }
     );
-    
-    res.json({ success: true, message: 'Daily calendar group set successfully' });
+
+    res.json({ success: true, message: 'Daily calendar groups set successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get daily calendar group
+// Get daily calendar groups
 router.get('/calendar-group', sessionMiddleware, async (req, res) => {
   try {
     if (!req.user.isAdmin) {
@@ -228,9 +250,9 @@ router.get('/calendar-group', sessionMiddleware, async (req, res) => {
     }
 
     const WhatsAppSettings = (await import('../models/WhatsAppSettings.js')).default;
-    const setting = await WhatsAppSettings.findOne({ settingKey: 'dailyCalendarGroup' });
-    
-    res.json({ groupId: setting?.settingValue || null });
+    const setting = await WhatsAppSettings.findOne({ settingKey: 'dailyCalendarGroups' });
+
+    res.json({ groups: setting?.settingValue || [] });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

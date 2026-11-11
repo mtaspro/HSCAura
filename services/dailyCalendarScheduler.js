@@ -22,12 +22,12 @@ class DailyCalendarScheduler {
     // Schedule for 12:00 AM Bangladesh time (GMT+6)
     // Cron runs in server timezone, so we need to adjust
     const cronExpression = '0 0 * * *'; // 12:00 AM server time
-    
+
     console.log('📅 Starting daily calendar scheduler...');
-    
+
     // Initialize motivational messages (AI-generated for DU Admission)
     await this.motivationalService.initializeMessages();
-    
+
     this.cronJob = cron.schedule(cronExpression, async () => {
       await this.sendDailyCalendarUpdate();
     }, {
@@ -48,24 +48,27 @@ class DailyCalendarScheduler {
     }
   }
 
-  // Send daily calendar update via NeuraX
+  // Send daily calendar update via NeuraX to all configured groups
   async sendDailyCalendarUpdate() {
     // Check if today is December 31st
     const today = new Date();
     const isNewYearEve = today.getDate() === 31 && today.getMonth() === 11;
-    
+
+    // Get the calendar groups setting (supports multiple groups)
+    const calendarGroupsSetting = await WhatsAppSettings.findOne({
+      settingKey: 'dailyCalendarGroups'
+    });
+
+    const groups = calendarGroupsSetting?.settingValue || [];
+
+    if (groups.length === 0) {
+      console.log('⚠️ No calendar groups configured for daily updates');
+      return;
+    }
+
     if (isNewYearEve) {
       try {
-        console.log('🎉 Sending New Year special message...');
-        
-        const calendarGroupSetting = await WhatsAppSettings.findOne({ 
-          settingKey: 'dailyCalendarGroup' 
-        });
-
-        if (!calendarGroupSetting || !calendarGroupSetting.settingValue) {
-          console.log('⚠️ No calendar group configured');
-          return;
-        }
+        console.log('🎉 Sending New Year special message to all calendar groups...');
 
         const specialMessage = `Hi my human buddies 😋,
 
@@ -118,44 +121,40 @@ See you… maybe in another world 🌌
 
 Happy New Year 🥳✨
 — NeuraX 🤖💙`;
-        
-        await whatsappService.sendGroupMessage(calendarGroupSetting.settingValue, specialMessage);
-        console.log('✅ New Year special message sent successfully');
+
+        for (const group of groups) {
+          if (!group.groupId) continue;
+          await whatsappService.sendGroupMessage(group.groupId, specialMessage);
+        }
+        console.log(`✅ New Year special message sent to ${groups.length} group(s)`);
         return;
       } catch (error) {
         console.error('❌ Error sending New Year message:', error);
         return;
       }
     }
-    
-    try {
-      console.log('📅 Generating daily calendar update via NeuraX...');
-      
-      // Get the calendar group setting
-      const calendarGroupSetting = await WhatsAppSettings.findOne({ 
-        settingKey: 'dailyCalendarGroup' 
-      });
 
-      if (!calendarGroupSetting || !calendarGroupSetting.settingValue) {
-        console.log('⚠️ No calendar group configured for daily updates');
-        return;
-      }
-      
-      // Get upcoming exams
-      const examData = await this.getUpcomingExams();
-      
-      // Get calendar data
+    try {
+      console.log(`📅 Generating daily calendar updates for ${groups.length} group(s)...`);
+
+      // Get calendar data (same for all groups)
       const calendarData = await this.calendarService.generateCalendarData();
-      
-      // Get motivational tone/category from today's seeded message (not the text itself)
+
+      // Get motivational category from today's seeded message (not the text itself)
       const messageData = await this.motivationalService.getTodayMessage();
-      const tone = messageData.category || 'encouraging';
-      const daysRemaining = messageData.examsRemaining != null ? messageData.examsRemaining : examData.reduce((min, e) => Math.min(min, e.daysLeft), Infinity);
-      
-      const examInfo = examData.length > 0 ? examData.map(e => e.daysLeft === 0 ? `${e.examName} - TODAY` : `${e.examName} in ${e.daysLeft} days`).join(', ') : 'None';
-      
-      // Create prompt for NeuraX — AI generates the motivational closing itself
-      const prompt = `Create a short, witty daily WhatsApp message for students.
+
+      for (const group of groups) {
+        const { groupId, examIds = [] } = group;
+        if (!groupId) continue;
+
+        try {
+          // Get upcoming exams for THIS group (filtered by selected examIds)
+          const examData = await this.getUpcomingExams(examIds);
+
+          const examInfo = examData.length > 0 ? examData.map(e => e.daysLeft === 0 ? `${e.examName} - TODAY` : `${e.examName} in ${e.daysLeft} days`).join(', ') : 'None';
+
+          // Create prompt for NeuraX — AI generates the motivational closing itself
+          const prompt = `Create a short, witty daily WhatsApp message for students.
 
 Day: ${calendarData.dayName}
 Date: ${calendarData.englishDate}
@@ -167,7 +166,7 @@ Wrap ONLY the final message between these exact markers and nothing else:
 
 @@CALENDAR_MESSAGE_START@@
 Today: *${calendarData.dayName}, ${calendarData.englishDate}*
-${calendarData.hasHolidays ? '🎉 ' + calendarData.holidays.join(', ') + ' - Enjoy responsibly!\\n' : ''}${examData.length > 0 ? examData.map(e => e.daysLeft === 0 ? '📚 *' + e.examName + '* - TODAY! 💪\\n' : '📚 *' + e.examName + '* in *' + e.daysLeft + '* days 📖\\n').join('') : ''}Your AI-generated motivational closing here (1-2 lines, English only, human-like, slightly roasted, motivational)
+${calendarData.hasHolidays ? '🎉 ' + calendarData.holidays.join(', ') + ' - Enjoy responsibly!\n' : ''}${examData.length > 0 ? examData.map(e => e.daysLeft === 0 ? '📚 *' + e.examName + '* - TODAY! 💪\n' : '📚 *' + e.examName + '* in *' + e.daysLeft + '* days 📖\n').join('') : ''}Your AI-generated motivational closing here (1-2 lines, English only, human-like, slightly roasted, motivational)
 @@CALENDAR_MESSAGE_END@@
 
 RULES:
@@ -178,97 +177,98 @@ RULES:
 - FULLY ENGLISH ONLY — no Bengali, no Bangla, no mixed language
 - Human-like, conversational, relatable tone — like a friend giving a reality check
 - Include light, funny roasting for students who are not studying seriously, but keep it motivational`;
-      const axios = (await import('axios')).default;
-      const apiUrl = process.env.API_URL || process.env.VITE_API_URL || 'http://localhost:5000';
-      const aiResponse = await axios.post(`${apiUrl}/api/ai-chat`, {
-        message: prompt,
-        integration: 'daily_calendar',
-        systemPrompt: 'You are NeuraX. Generate concise calendar messages. IMPORTANT: Output ONLY the final message wrapped in these exact markers: @@CALENDAR_MESSAGE_START@@ ... @@CALENDAR_MESSAGE_END@@. Do NOT output reasoning, thought process, or meta-commentary outside the markers. If you think silently, do not show it. The message inside the markers must be FULLY ENGLISH ONLY, human-like, conversational, with light roasting for students who are not studying seriously, but keep it motivational.'
-      }, { timeout: 30000 });
+          const axios = (await import('axios')).default;
+          const apiUrl = process.env.API_URL || process.env.VITE_API_URL || 'http://localhost:5000';
+          const aiResponse = await axios.post(`${apiUrl}/api/ai-chat`, {
+            message: prompt,
+            integration: 'daily_calendar',
+            systemPrompt: 'You are NeuraX. Generate concise calendar messages. IMPORTANT: Output ONLY the final message wrapped in these exact markers: @@CALENDAR_MESSAGE_START@@ ... @@CALENDAR_MESSAGE_END@@. Do NOT output reasoning, thought process, or meta-commentary outside the markers. If you think silently, do not show it. The message inside the markers must be FULLY ENGLISH ONLY, human-like, conversational, with light roasting for students who are not studying seriously, but keep it motivational.'
+          }, { timeout: 30000 });
 
-      let aiContent = aiResponse.data?.response || '';
-      aiContent = aiContent.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<reasoning>[\s\S]*?<\/reasoning>/g, '');
-      
-      if (!aiContent) {
-        throw new Error('Empty response from Gemini');
-      }
-      
-      let neuraXMessage = aiContent;
-      
-      const START_MARKER = '@@CALENDAR_MESSAGE_START@@';
-      const END_MARKER = '@@CALENDAR_MESSAGE_END@@';
-      
-      const startIdx = neuraXMessage.indexOf(START_MARKER);
-      const endIdx = neuraXMessage.indexOf(END_MARKER);
-      
-      if (startIdx >= 0 && endIdx > startIdx) {
-        neuraXMessage = neuraXMessage.substring(startIdx + START_MARKER.length, endIdx).trim();
-      } else if (startIdx >= 0) {
-        const afterStart = neuraXMessage.substring(startIdx + START_MARKER.length);
-        const todayMatch = afterStart.match(/Today:[\s\S]*/);
-        neuraXMessage = todayMatch ? todayMatch[0].trim() : afterStart.trim();
-      } else {
-        const todayIndex = neuraXMessage.indexOf('Today:');
-        if (todayIndex >= 0) {
-          neuraXMessage = neuraXMessage.substring(todayIndex).trim();
+          let aiContent = aiResponse.data?.response || '';
+          aiContent = aiContent.replace(/```[\s\S]*?```/g, '').replace(/<reasoning>[\s\S]*?<\/reasoning>/g, '');
+
+          if (!aiContent) {
+            throw new Error('Empty response from AI');
+          }
+
+          let neuraXMessage = aiContent;
+
+          const START_MARKER = '@@CALENDAR_MESSAGE_START@@';
+          const END_MARKER = '@@CALENDAR_MESSAGE_END@@';
+
+          const startIdx = neuraXMessage.indexOf(START_MARKER);
+          const endIdx = neuraXMessage.indexOf(END_MARKER);
+
+          if (startIdx >= 0 && endIdx > startIdx) {
+            neuraXMessage = neuraXMessage.substring(startIdx + START_MARKER.length, endIdx).trim();
+          } else if (startIdx >= 0) {
+            const afterStart = neuraXMessage.substring(startIdx + START_MARKER.length);
+            const todayMatch = afterStart.match(/Today:[\s\S]*/);
+            neuraXMessage = todayMatch ? todayMatch[0].trim() : afterStart.trim();
+          } else {
+            const todayIndex = neuraXMessage.indexOf('Today:');
+            if (todayIndex >= 0) {
+              neuraXMessage = neuraXMessage.substring(todayIndex).trim();
+            }
+          }
+
+          // Final safety: if message still doesn't start with "Today:", drop to fallback
+          if (!neuraXMessage.startsWith('Today:')) {
+            neuraXMessage = null;
+          }
+
+          if (!neuraXMessage) {
+            throw new Error('AI response did not contain a valid calendar message');
+          }
+
+          // Send filtered NeuraX response to WhatsApp group
+          await whatsappService.sendGroupMessage(groupId, neuraXMessage);
+
+          console.log(`✅ Daily calendar update sent to group ${groupId} successfully`);
+          console.log('📝 NeuraX Message:', neuraXMessage);
+
+        } catch (groupError) {
+          console.error(`❌ Error sending daily calendar update to group ${groupId}:`, groupError);
+
+          // Fallback to direct message for this group
+          try {
+            const examData = await this.getUpcomingExams(examIds);
+            const examMessages = examData.map(e => e.daysLeft === 0 ? `📚 *${e.examName}* - *TODAY*! 💪` : `📚 *${e.examName}* in *${e.daysLeft}* days 📖`).join('\n\n');
+
+            const genericMotivational = {
+              finale: '🎉 Admission test is over! Congratulations! You did it!',
+              final_push: '🔥 Final push! Stay focused, stay strong — you are almost there!',
+              motivation: '💪 Keep pushing forward! Every day counts!',
+              progress: '📚 Steady progress! Keep building that momentum!',
+              opening: '🚀 Stay focused! The journey has just begun — make it count!',
+              celebration: '🎉 Keep it up! Celebrate every small win!',
+              funny: '😄 Stay sane! Balance study with breaks!',
+              study_tip: '📖 Study smart, not just hard!',
+              unit_based: '🎯 Master your units one by one!',
+              subject_focus: '📝 Focus on your weak subjects today!'
+            };
+
+            const fallbackMotivation = genericMotivational[messageData.category] || genericMotivational['motivation'];
+
+            let fallbackMessage = `Today: *${calendarData.dayName}, ${calendarData.englishDate}*\n\n${calendarData.hasHolidays ? `🎉 Special: ${calendarData.holidays.join(', ')} - Enjoy responsibly!\n\n` : ''}${examMessages ? examMessages + '\n\n' : ''}${fallbackMotivation}`;
+
+            fallbackMessage = fallbackMessage.replace(/```[\s\S]*?```/g, '');
+            fallbackMessage = fallbackMessage.replace(/<reasoning>[\s\S]*?<\/reasoning>/g, '');
+            fallbackMessage = fallbackMessage.replace(/<.*?>/g, '');
+
+            await whatsappService.sendGroupMessage(groupId, fallbackMessage);
+            console.log(`✅ Fallback calendar message sent to group ${groupId}`);
+          } catch (fallbackError) {
+            console.error(`❌ Fallback also failed for group ${groupId}:`, fallbackError);
+          }
         }
       }
-      
-      // Final safety: if message still doesn't start with "Today:", drop to fallback
-      if (!neuraXMessage.startsWith('Today:')) {
-        neuraXMessage = null;
-      }
-      
-      if (!neuraXMessage) {
-        throw new Error('AI response did not contain a valid calendar message');
-      }
-      
-      // Send filtered NeuraX response to WhatsApp group
-      await whatsappService.sendGroupMessage(calendarGroupSetting.settingValue, neuraXMessage);
-      
-      console.log('✅ Daily calendar update sent via NeuraX successfully');
-      console.log('📝 NeuraX Message:', neuraXMessage);
-      
+
+      console.log('✅ Daily calendar updates sent to all groups successfully');
+
     } catch (error) {
-      console.error('❌ Error sending daily calendar update via NeuraX:', error);
-      
-      // Fallback to direct message if NeuraX fails
-      try {
-        const calendarData = await this.calendarService.generateCalendarData();
-        const examData = await this.getUpcomingExams();
-        const examMessages = examData.map(e => e.daysLeft === 0 ? `📚 *${e.examName}* - *TODAY*! 💪` : `📚 *${e.examName}* in *${e.daysLeft}* days 📖`).join('\n\n');
-        
-        const messageData = await this.motivationalService.getTodayMessage();
-        
-        const genericMotivational = {
-          finale: '🎉 Admission test is over! Congratulations! You did it!',
-          final_push: '🔥 Final push! Stay focused, stay strong — you are almost there!',
-          motivation: '💪 Keep pushing forward! Every day counts!',
-          progress: '📚 Steady progress! Keep building that momentum!',
-          opening: '🚀 Stay focused! The journey has just begun — make it count!',
-          celebration: '🎉 Keep it up! Celebrate every small win!',
-          funny: '😄 Stay sane! Balance study with breaks!',
-          study_tip: '📖 Study smart, not just hard!',
-          unit_based: '🎯 Master your units one by one!',
-          subject_focus: '📝 Focus on your weak subjects today!'
-        };
-        
-        const fallbackMotivation = genericMotivational[messageData.category] || genericMotivational['motivation'];
-        
-        let fallbackMessage = `Today: *${calendarData.dayName}, ${calendarData.englishDate}*\n\n${calendarData.hasHolidays ? `🎉 Special: ${calendarData.holidays.join(', ')} - Enjoy responsibly!\n\n` : ''}${examMessages ? examMessages + '\n\n' : ''}${fallbackMotivation}`;
-        
-        fallbackMessage = fallbackMessage.replace(/<think>[\s\S]*?<\/think>/g, '');
-        fallbackMessage = fallbackMessage.replace(/<reasoning>[\s\S]*?<\/reasoning>/g, '');
-        fallbackMessage = fallbackMessage.replace(/<.*?>/g, '');
-        
-        const calendarGroupSetting = await WhatsAppSettings.findOne({ settingKey: 'dailyCalendarGroup' });
-        if (calendarGroupSetting?.settingValue) {
-          await whatsappService.sendGroupMessage(calendarGroupSetting.settingValue, fallbackMessage);
-          console.log('✅ Fallback calendar message sent');
-        }
-      } catch (fallbackError) {
-        console.error('❌ Fallback also failed:', fallbackError);
-      }
+      console.error('❌ Error sending daily calendar updates:', error);
     }
   }
 
@@ -278,22 +278,28 @@ RULES:
     await this.sendDailyCalendarUpdate();
   }
 
-  // Get upcoming exams with countdown
-  async getUpcomingExams() {
+  // Get upcoming exams with countdown, optionally filtered by selected exam IDs
+  async getUpcomingExams(examIds = null) {
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
-      const exams = await Exam.find({ 
+
+      const query = {
         isActive: true,
         examDate: { $gte: today }
-      }).sort({ examDate: 1 });
-      
+      };
+
+      if (examIds && examIds.length > 0) {
+        query._id = { $in: examIds };
+      }
+
+      const exams = await Exam.find(query).sort({ examDate: 1 });
+
       return exams.map(exam => {
         const examDate = new Date(exam.examDate);
         examDate.setHours(0, 0, 0, 0);
         const daysLeft = Math.ceil((examDate - today) / (1000 * 60 * 60 * 24));
-        
+
         return {
           examName: exam.examName,
           examDate: exam.examDate,
