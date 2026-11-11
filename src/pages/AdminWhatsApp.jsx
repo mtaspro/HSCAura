@@ -13,6 +13,7 @@ const AdminWhatsApp = () => {
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [battleGroupId, setBattleGroupId] = useState('');
   const [calendarGroups, setCalendarGroups] = useState([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState([]);
   const [exams, setExams] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -97,19 +98,26 @@ const AdminWhatsApp = () => {
     }
   };
 
-  const getGroupExams = (groupId) => {
-    const group = calendarGroups.find(g => g.groupId === groupId);
-    return group ? group.examIds || [] : [];
-  };
-
   const toggleGroupSelection = (groupId) => {
+    // Toggle UI selection in the "Select Groups" box
+    setSelectedGroupIds(prev => {
+      if (prev.includes(groupId)) {
+        return prev.filter(id => id !== groupId);
+      }
+      return [...prev, groupId];
+    });
+
+    // Immediately show the group card below so exams can be picked
     setCalendarGroups(prev => {
       const exists = prev.find(g => g.groupId === groupId);
-      if (exists) {
-        return prev.filter(g => g.groupId !== groupId);
-      }
+      if (exists) return prev;
       return [...prev, { groupId, groupName: '', examIds: [] }];
     });
+  };
+
+  const removeCalendarGroup = (groupId) => {
+    setCalendarGroups(prev => prev.filter(g => g.groupId !== groupId));
+    setSelectedGroupIds(prev => prev.filter(id => id !== groupId));
   };
 
   const toggleExamForGroup = (groupId, examId) => {
@@ -173,6 +181,8 @@ const AdminWhatsApp = () => {
 
       if (response.data.success) {
         setSuccessMessage('Daily calendar groups set successfully!');
+        // Untick groups from the "Select Groups" box after saving
+        setSelectedGroupIds([]);
       } else {
         setErrorMessage(response.data.error || 'Failed to set calendar groups');
       }
@@ -434,7 +444,7 @@ const AdminWhatsApp = () => {
                     <p className="text-sm text-gray-500 dark:text-gray-400 p-3">No groups available</p>
                   ) : (
                     groups.map(group => {
-                      const isSelected = calendarGroups.some(g => g.groupId === group.id);
+                      const isSelected = selectedGroupIds.includes(group.id);
                       return (
                         <div
                           key={group.id}
@@ -464,11 +474,20 @@ const AdminWhatsApp = () => {
                   <p className="text-xs font-semibold text-gray-500 mb-2">Select Exams Per Group</p>
                   {calendarGroups.map((group, idx) => {
                     const groupInfo = groups.find(g => g.id === group.groupId);
-                    const groupExams = getGroupExams(group.groupId);
+                    const groupExams = group.examIds || [];
                     return (
                       <div key={idx} className="border rounded-lg p-3 bg-gray-50 dark:bg-gray-800/50">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium text-sm">{groupInfo ? groupInfo.name : group.groupId}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm">{groupInfo ? groupInfo.name : group.groupId}</span>
+                            <button
+                              onClick={() => removeCalendarGroup(group.groupId)}
+                              className="text-xs text-red-600 hover:text-red-800 dark:hover:text-red-400 p-1"
+                              title="Remove group"
+                            >
+                              ×
+                            </button>
+                          </div>
                           <span className="text-xs text-gray-500">{groupExams.length} exam(s) selected</span>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
