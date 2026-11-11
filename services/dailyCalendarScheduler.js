@@ -182,7 +182,7 @@ RULES:
           const aiResponse = await axios.post(`${apiUrl}/api/ai-chat`, {
             message: prompt,
             integration: 'daily_calendar',
-            systemPrompt: 'You are NeuraX. Generate concise calendar messages. IMPORTANT: Output ONLY the final message wrapped in these exact markers: @@CALENDAR_MESSAGE_START@@ ... @@CALENDAR_MESSAGE_END@@. Do NOT output reasoning, thought process, or meta-commentary outside the markers. If you think silently, do not show it. The message inside the markers must be FULLY ENGLISH ONLY, human-like, conversational, with light roasting for students who are not studying seriously, but keep it motivational.'
+            systemPrompt: 'You are NeuraX. Generate concise calendar messages. IMPORTANT: Output ONLY the final message wrapped in these exact markers: @@CALENDAR_MESSAGE_START@@ ... @@CALENDAR_MESSAGE_END@@. Do NOT output reasoning, thought process, or meta-commentary outside the markers. If you think silently, do not show it. The message inside the markers must be FULLY ENGLISH ONLY, human-like, conversational, with an inspiring tone (students are deep in exam prep now), lightly roasting laziness, wasted time, or getting derailed — but keep it motivational and encouraging.',
           }, { timeout: 30000 });
 
           let aiContent = aiResponse.data?.response || '';
