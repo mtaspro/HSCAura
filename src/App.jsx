@@ -16,6 +16,7 @@ import Register from "./components/Register";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminRoute from './components/AdminRoute';
 import ExaminerRoute from './components/ExaminerRoute';
+import SuperAdminRoute from './components/SuperAdminRoute';
 
 // Lazy load heavy components
 const QuizBattleRoom = lazy(() => import("./pages/QuizBattleRoom"));
@@ -215,10 +216,10 @@ function Navbar() {
               <Link to={isAuthenticated ? "/dashboard" : "/login"} className={navLinkClass('/dashboard')}>Dashboard</Link>
               <Link to={isAuthenticated ? "/leaderboard" : "/login"} className={navLinkClass('/leaderboard')}>Leaderboard</Link>
               <Link to={isAuthenticated ? "/badges" : "/login"} className={navLinkClass('/badges')}>Badges</Link>
-              {isAuthenticated && (
+              {isAuthenticated && isSuperAdmin && (
                 <Link to="/adventure" className={navLinkClass('/adventure')}>Adventure</Link>
               )}
-              {isAuthenticated && (
+              {isAuthenticated && isSuperAdmin && (
                 <Link to="/virtual-lab" className={navLinkClass('/virtual-lab')}>Virtual Lab</Link>
               )}
               <Link to="/about" className={navLinkClass('/about')}>About</Link>
@@ -267,10 +268,10 @@ function Navbar() {
                 <Link to={isAuthenticated ? "/dashboard" : "/login"} onClick={() => setMenuOpen(false)} className="block aura-nav-link text-base py-2.5">Dashboard</Link>
                 <Link to={isAuthenticated ? "/leaderboard" : "/login"} onClick={() => setMenuOpen(false)} className="block aura-nav-link text-base py-2.5">Leaderboard</Link>
                 <Link to={isAuthenticated ? "/badges" : "/login"} onClick={() => setMenuOpen(false)} className="block aura-nav-link text-base py-2.5">Badges</Link>
-                {isAuthenticated && (
+                {isAuthenticated && isSuperAdmin && (
                   <Link to="/adventure" onClick={() => setMenuOpen(false)} className="block aura-nav-link text-base py-2.5">Adventure</Link>
                 )}
-                {isAuthenticated && (
+                {isAuthenticated && isSuperAdmin && (
                   <Link to="/virtual-lab" onClick={() => setMenuOpen(false)} className="block aura-nav-link text-base py-2.5">Virtual Lab</Link>
                 )}
                 <Link to="/about" onClick={() => setMenuOpen(false)} className="block aura-nav-link text-base py-2.5">About</Link>
@@ -462,88 +463,88 @@ function AnimatedRoutes() {
                </ProtectedRoute>
              }
            />
-            <Route
-              path="/virtual-lab"
-              element={
-                <ProtectedRoute>
-                  <VirtualLabHub />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/virtual-lab/chemistry"
-              element={
-                <ProtectedRoute>
-                  <ChemistryLab />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/virtual-lab/physics"
-              element={
-                <ProtectedRoute>
-                  <PhysicsLab />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/virtual-lab/physics/post-office-box"
-              element={
-                <ProtectedRoute>
-                  <PostOfficeBoxExperiment />
-                </ProtectedRoute>
-              }
-            />
              <Route
-               path="/virtual-lab/physics/coordinate-picker"
+               path="/virtual-lab"
                element={
-                 <ProtectedRoute>
-                   <CoordinatePickerDebug />
-                 </ProtectedRoute>
+                 <SuperAdminRoute>
+                   <VirtualLabHub />
+                 </SuperAdminRoute>
                }
              />
              <Route
-               path="/virtual-lab/physics/not-gate"
+               path="/virtual-lab/chemistry"
                element={
-                 <ProtectedRoute>
-                   <LogicGateExperiment gateType="NOT" />
-                 </ProtectedRoute>
+                 <SuperAdminRoute>
+                   <ChemistryLab />
+                 </SuperAdminRoute>
                }
              />
              <Route
-               path="/virtual-lab/physics/and-gate"
+               path="/virtual-lab/physics"
                element={
-                 <ProtectedRoute>
-                   <LogicGateExperiment gateType="AND" />
-                 </ProtectedRoute>
+                 <SuperAdminRoute>
+                   <PhysicsLab />
+                 </SuperAdminRoute>
                }
              />
              <Route
-               path="/virtual-lab/physics/or-gate"
+               path="/virtual-lab/physics/post-office-box"
                element={
-                 <ProtectedRoute>
-                   <LogicGateExperiment gateType="OR" />
-                 </ProtectedRoute>
+                 <SuperAdminRoute>
+                   <PostOfficeBoxExperiment />
+                 </SuperAdminRoute>
                }
              />
-             <Route
-               path="/adventure"
-              element={
-                <ProtectedRoute>
-                  <AdventureHub />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/adventure/:levelKey"
-              element={
-                <ProtectedRoute>
-                  <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div></div>}>
-                    <AdventureLevelPage />
-                  </Suspense>
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/virtual-lab/physics/coordinate-picker"
+                element={
+                  <SuperAdminRoute>
+                    <CoordinatePickerDebug />
+                  </SuperAdminRoute>
+                }
+              />
+              <Route
+                path="/virtual-lab/physics/not-gate"
+                element={
+                  <SuperAdminRoute>
+                    <LogicGateExperiment gateType="NOT" />
+                  </SuperAdminRoute>
+                }
+              />
+              <Route
+                path="/virtual-lab/physics/and-gate"
+                element={
+                  <SuperAdminRoute>
+                    <LogicGateExperiment gateType="AND" />
+                  </SuperAdminRoute>
+                }
+              />
+              <Route
+                path="/virtual-lab/physics/or-gate"
+                element={
+                  <SuperAdminRoute>
+                    <LogicGateExperiment gateType="OR" />
+                  </SuperAdminRoute>
+                }
+              />
+               <Route
+                 path="/adventure"
+                element={
+                  <SuperAdminRoute>
+                    <AdventureHub />
+                  </SuperAdminRoute>
+                }
+              />
+              <Route
+                path="/adventure/:levelKey"
+                element={
+                  <SuperAdminRoute>
+                    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div></div>}>
+                      <AdventureLevelPage />
+                    </Suspense>
+                  </SuperAdminRoute>
+                }
+              />
            <Route
              path="/admin"
              element={
