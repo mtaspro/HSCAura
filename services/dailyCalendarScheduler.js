@@ -151,7 +151,7 @@ Happy New Year 🥳✨
           // Get upcoming exams for THIS group (filtered by selected examIds)
           const examData = await this.getUpcomingExams(examIds);
 
-          const examInfo = examData.length > 0 ? examData.map(e => e.daysLeft === 0 ? `${e.examName} - TODAY` : `${e.examName} in ${e.daysLeft} days`).join(', ') : 'None';
+          const examInfo = examData.length > 0 ? examData.map(e => e.daysLeft <= 0 ? `${e.examName} - TODAY` : `${e.examName} in ${e.daysLeft} days`).join(', ') : 'None';
 
           // Create prompt for NeuraX — AI generates the motivational closing itself
           const prompt = `Create a short, witty daily WhatsApp message for students.
@@ -166,7 +166,7 @@ Wrap ONLY the final message between these exact markers and nothing else:
 
 @@CALENDAR_MESSAGE_START@@
 Today: *${calendarData.dayName}, ${calendarData.englishDate}*
-${calendarData.hasHolidays ? '🎉 ' + calendarData.holidays.join(', ') + ' - Enjoy responsibly!\n' : ''}${examData.length > 0 ? examData.map(e => e.daysLeft === 0 ? '📚 *' + e.examName + '* - TODAY! 💪\n' : '📚 *' + e.examName + '* in *' + e.daysLeft + '* days 📖\n').join('') : ''}Your AI-generated motivational closing here (1-2 lines, English only, human-like, slightly roasted, motivational)
+${calendarData.hasHolidays ? '🎉 ' + calendarData.holidays.join(', ') + ' - Enjoy responsibly!\n' : ''}${examData.length > 0 ? examData.map(e => e.daysLeft <= 0 ? '📚 *' + e.examName + '* - TODAY! 💪\n' : '📚 *' + e.examName + '* in *' + e.daysLeft + '* days 📖\n').join('') : ''}Your AI-generated motivational closing here (1-2 lines, English only, human-like, slightly roasted, motivational)
 @@CALENDAR_MESSAGE_END@@
 
 RULES:
@@ -234,7 +234,7 @@ RULES:
           // Fallback to direct message for this group
           try {
             const examData = await this.getUpcomingExams(examIds);
-            const examMessages = examData.map(e => e.daysLeft === 0 ? `📚 *${e.examName}* - *TODAY*! 💪` : `📚 *${e.examName}* in *${e.daysLeft}* days 📖`).join('\n\n');
+            const examMessages = examData.map(e => e.daysLeft <= 0 ? `📚 *${e.examName}* - *TODAY*! 💪` : `📚 *${e.examName}* in *${e.daysLeft}* days 📖`).join('\n\n');
 
             const genericMotivational = {
               finale: '🎉 Admission test is over! Congratulations! You did it!',
@@ -298,14 +298,14 @@ RULES:
       return exams.map(exam => {
         const examDate = new Date(exam.examDate);
         examDate.setHours(0, 0, 0, 0);
-        const daysLeft = Math.ceil((examDate - today) / (1000 * 60 * 60 * 24));
+        const daysLeft = Math.ceil((examDate - today) / (1000 * 60 * 60 * 24)) - 1;
 
         return {
           examName: exam.examName,
           examDate: exam.examDate,
           daysLeft
         };
-      }).filter(exam => exam.daysLeft >= 0);
+      }).filter(exam => exam.daysLeft >= -1);
     } catch (error) {
       console.error('Error getting upcoming exams:', error);
       return [];

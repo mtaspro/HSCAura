@@ -559,7 +559,7 @@ const SuperAdminDashboard = () => {
                 {exams.map((exam) => {
                   const examDate = new Date(exam.examDate);
                   const today = new Date();
-                  const daysLeft = Math.ceil((examDate - today) / (1000 * 60 * 60 * 24));
+                  const daysLeft = Math.ceil((examDate - today) / (1000 * 60 * 60 * 24)) - 1;
                   
                   return (
                     <div key={exam._id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
@@ -567,7 +567,7 @@ const SuperAdminDashboard = () => {
                         <h4 className="font-medium">{exam.examName}</h4>
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           {examDate.toLocaleDateString()} 
-                          {daysLeft >= 0 ? ` (${daysLeft} days left)` : ' (Past)'}
+                          {daysLeft <= 0 ? ' (Today)' : ` (${daysLeft} days left)`}
                         </p>
                       </div>
                       <button

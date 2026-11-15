@@ -767,7 +767,7 @@ const About = () => {
         'UI/UX design and animations'
       ],
       socials: [
-        { platform: 'X', icon: FaTwitter, url: 'https://x.com/AAMahtab', color: 'text-gray-800 dark:text-gray-200' },
+        { platform: 'X', icon: FaTwitter, url: 'https://x.com/AA_Mahtab', color: 'text-gray-800 dark:text-gray-200' },
         { platform: 'Reddit', icon: FaReddit, url: 'https://www.reddit.com/user/After-Ad9008', color: 'text-gray-800 dark:text-gray-200' },
         { platform: 'GitHub', icon: FaGithub, url: 'https://github.com/mtaspro', color: 'text-gray-800 dark:text-gray-200' },
         { platform: 'Devpost', icon: FaLaptopCode, url: 'https://devpost.com/mtaspro', color: 'text-gray-800 dark:text-gray-200' },
